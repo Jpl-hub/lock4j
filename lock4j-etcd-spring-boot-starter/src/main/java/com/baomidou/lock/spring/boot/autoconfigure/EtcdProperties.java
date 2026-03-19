@@ -21,7 +21,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * etcd 配置属性
  *
- * @author yourname
+ * @author Jpl
  */
 @ConfigurationProperties(prefix = "lock4j.etcd")
 public class EtcdProperties {

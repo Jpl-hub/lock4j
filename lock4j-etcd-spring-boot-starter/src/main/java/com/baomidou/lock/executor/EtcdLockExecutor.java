@@ -34,7 +34,7 @@ import java.util.Objects;
 /**
  * Etcd分布式锁执行器
  * 
- * @author yourname
+ * @author Jpl
  */
 @Slf4j
 public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {

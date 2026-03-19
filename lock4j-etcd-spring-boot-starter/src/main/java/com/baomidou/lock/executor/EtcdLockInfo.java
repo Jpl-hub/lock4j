@@ -21,7 +21,7 @@ import io.etcd.jetcd.ByteSequence;
 /**
  * Etcd锁信息类，用于保存锁的相关信息
  *
- * @author yourname
+ * @author Jpl
  */
 public class EtcdLockInfo {
     

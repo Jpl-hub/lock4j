@@ -36,7 +36,7 @@ import java.util.Arrays;
  * etcd锁自动配置器
  *
  * @author zengzhihong
- * @author yourname
+ * @author Jpl
  */
 @Slf4j
 @Configuration
