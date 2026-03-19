@@ -9,7 +9,7 @@ import org.springframework.core.Ordered;
 import java.lang.annotation.*;
 
 /**
- * 基于{@link org.redisson.Redisson}实现的分布式锁
+ * 基于 Etcd 实现的分布式锁
  *
  * @author huangchengxing
  * @see Lock4j

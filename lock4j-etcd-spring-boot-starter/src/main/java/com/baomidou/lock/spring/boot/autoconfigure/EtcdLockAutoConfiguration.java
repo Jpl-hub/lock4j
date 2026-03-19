@@ -50,7 +50,7 @@ public class EtcdLockAutoConfiguration {
      * @param properties etcd配置属性
      * @return etcd客户端
      */
-    @Bean
+    @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     public Client etcdClient(EtcdProperties properties) {
         try {
@@ -78,11 +78,6 @@ public class EtcdLockAutoConfiguration {
             // 设置连接超时
             if (properties.getConnectTimeout() > 0) {
                 builder.connectTimeout(Duration.ofMillis(properties.getConnectTimeout()));
-            }
-            
-            // 设置操作超时
-            if (properties.getOperationTimeout() > 0) {
-                builder.executorService(java.util.concurrent.Executors.newCachedThreadPool());
             }
             
             // 设置用户名和密码
@@ -120,8 +115,8 @@ public class EtcdLockAutoConfiguration {
     @Bean
     @Order(400)
     @ConditionalOnMissingBean
-    public EtcdLockExecutor etcdLockExecutor(Client etcdClient) {
+    public EtcdLockExecutor etcdLockExecutor(Client etcdClient, EtcdProperties properties) {
         log.info("Creating EtcdLockExecutor with etcd client");
-        return new EtcdLockExecutor(etcdClient);
+        return new EtcdLockExecutor(etcdClient, properties.getOperationTimeout());
     }
 }

@@ -22,7 +22,6 @@ import io.etcd.jetcd.Lease;
 import io.etcd.jetcd.Lock;
 import io.etcd.jetcd.lease.LeaseGrantResponse;
 import io.etcd.jetcd.lock.LockResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
@@ -30,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.Objects;
 
 /**
  * Etcd分布式锁执行器
@@ -37,13 +37,24 @@ import java.util.concurrent.TimeoutException;
  * @author yourname
  */
 @Slf4j
-@RequiredArgsConstructor
 public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
 
+    private static final long DEFAULT_OPERATION_TIMEOUT = 3000L;
+
     private final Client etcdClient;
+    private final long operationTimeout;
+
+    public EtcdLockExecutor(Client etcdClient) {
+        this(etcdClient, DEFAULT_OPERATION_TIMEOUT);
+    }
+
+    public EtcdLockExecutor(Client etcdClient, long operationTimeout) {
+        this.etcdClient = etcdClient;
+        this.operationTimeout = operationTimeout > 0 ? operationTimeout : DEFAULT_OPERATION_TIMEOUT;
+    }
 
     /**
-     * Etcd目前不支持自动续期，所以返回false
+     * 当前执行器未提供基于租约 keepalive 的自动续期能力，所以返回 false。
      */
     @Override
     public boolean renewal() {
@@ -67,13 +78,14 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
         }
 
         try {
-            // 将毫秒转换为秒，etcd租约时间单位是秒
-            long expireSeconds = Math.max(1, expire / 1000);
+            long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(acquireTimeout);
+            // etcd 租约时间单位为秒，这里向上取整避免毫秒值被截断后提前过期。
+            long expireSeconds = Math.max(1, (expire + 999L) / 1000L);
             
             // 1. 创建租约
             Lease leaseClient = etcdClient.getLeaseClient();
             CompletableFuture<LeaseGrantResponse> leaseFuture = leaseClient.grant(expireSeconds);
-            LeaseGrantResponse leaseGrantResponse = leaseFuture.get(acquireTimeout, TimeUnit.MILLISECONDS);
+            LeaseGrantResponse leaseGrantResponse = leaseFuture.get(remainingMillis(deadlineNanos), TimeUnit.MILLISECONDS);
             long leaseId = leaseGrantResponse.getID();
             
             log.debug("Created lease with ID: {} for lock key: {}", leaseId, lockKey);
@@ -84,7 +96,7 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
                 ByteSequence lockKeyBytes = bytesOf(lockKey);
                 
                 CompletableFuture<LockResponse> lockFuture = lockClient.lock(lockKeyBytes, leaseId);
-                LockResponse lockResponse = lockFuture.get(acquireTimeout, TimeUnit.MILLISECONDS);
+                LockResponse lockResponse = lockFuture.get(remainingMillis(deadlineNanos), TimeUnit.MILLISECONDS);
                 
                 if (lockResponse != null && lockResponse.getKey() != null) {
                     log.debug("Successfully acquired lock for key: {} with lease: {}", lockKey, leaseId);
@@ -135,7 +147,7 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
         }
 
         // 验证锁值是否匹配（防止释放他人的锁）
-        if (!value.equals(lockInfo.getLockValue())) {
+        if (!Objects.equals(value, lockInfo.getLockValue())) {
             log.warn("Lock value mismatch for key: {}, expected: {}, actual: {}", 
                     key, lockInfo.getLockValue(), value);
             return false;
@@ -147,7 +159,7 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
         try {
             // 1. 释放锁
             Lock lockClient = etcdClient.getLockClient();
-            lockClient.unlock(lockInfo.getLockKey()).get(5000, TimeUnit.MILLISECONDS); // 5秒超时
+            lockClient.unlock(lockInfo.getLockKey()).get(operationTimeout, TimeUnit.MILLISECONDS);
             unlockSuccess = true;
             log.debug("Successfully unlocked key: {}", key);
             
@@ -185,7 +197,7 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
     private boolean revokeLease(long leaseId) {
         try {
             Lease leaseClient = etcdClient.getLeaseClient();
-            leaseClient.revoke(leaseId).get(3000, TimeUnit.MILLISECONDS); // 3秒超时
+            leaseClient.revoke(leaseId).get(operationTimeout, TimeUnit.MILLISECONDS);
             log.debug("Successfully revoked lease: {}", leaseId);
             return true;
         } catch (TimeoutException e) {
@@ -209,5 +221,13 @@ public class EtcdLockExecutor extends AbstractLockExecutor<EtcdLockInfo> {
      */
     private ByteSequence bytesOf(String value) {
         return ByteSequence.from(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private long remainingMillis(long deadlineNanos) throws TimeoutException {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0) {
+            throw new TimeoutException("Acquire lock timeout exceeded");
+        }
+        return TimeUnit.NANOSECONDS.toMillis(remainingNanos) + 1;
     }
 }
