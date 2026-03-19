@@ -41,7 +41,7 @@
 
     <name>lock4j</name>
     <description>
-        Declarative and programmatic distributed locks based on spring aop with RedisTemplate Redisson Zookeeper
+        Declarative and programmatic distributed locks based on spring aop with RedisTemplate Redisson Zookeeper Etcd
     </description>
     <inceptionYear>2018</inceptionYear>
 

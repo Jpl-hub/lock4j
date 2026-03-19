@@ -38,7 +38,7 @@ lock4j是一个分布式锁组件，其提供了多种不同的支持以满足�
 ## 特性
 
 1. 简单易用，功能强大，扩展性强。
-2. 支持redission,redisTemplate,zookeeper。可混用，支持扩展。
+2. 支持redission,redisTemplate,zookeeper,etcd。可混用，支持扩展。
 
 ## 如何使用
 
@@ -65,11 +65,17 @@ lock4j是一个分布式锁组件，其提供了多种不同的支持以满足�
         <artifactId>lock4j-zookeeper-spring-boot-starter</artifactId>
         <version>${latest.version}</version>
     </dependency>
+    <!--若使用etcd作为分布式锁底层，则需要引入-->
+    <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>lock4j-etcd-spring-boot-starter</artifactId>
+        <version>${latest.version}</version>
+    </dependency>
 </dependencies>
 
 ```
 
-2. 根据底层需要配置redis或zookeeper。
+2. 根据底层需要配置redis、zookeeper或etcd。
 
 ```yaml
 spring:
@@ -79,7 +85,10 @@ spring:
   coordinate:
     zookeeper:
       zkServers: 127.0.0.1:2181,127.0.0.1:2182,127.0.0.1:2183
-```
+lock4j:
+  etcd:
+    endpoints: http://127.0.0.1:2379
+``` 
 
 3. 在需要分布式的地方使用Lock4j注解。
 
@@ -111,7 +120,7 @@ public class DemoService {
 lock4j:
   acquire-timeout: 3000 #默认值3s，可不设置
   expire: 30000 #默认值30s，可不设置
-  primary-executor: com.baomidou.lock.executor.RedisTemplateLockExecutor #默认redisson>redisTemplate>zookeeper，可不设置
+  primary-executor: com.baomidou.lock.executor.RedisTemplateLockExecutor #默认redisson>redisTemplate>zookeeper>etcd，可不设置
   lock-key-prefix: lock4j #锁key前缀, 默认值lock4j，可不设置
 ```
 
